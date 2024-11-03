@@ -1,0 +1,211 @@
+# modules/report/__init__.py
+from .generator import ReportGenerator
+
+__all__ = ['ReportGenerator']
+
+# modules/report/generator.py
+from rich.console import Console
+from rich.table import Table
+from rich.panel import Panel
+import json
+import os
+from datetime import datetime
+from typing import Dict, List, Any
+from jinja2 import Environment, FileSystemLoader
+import matplotlib.pyplot as plt
+import networkx as nx
+import base64
+from io import BytesIO
+import logging
+
+class ReportGenerator:
+    """Generador avanzado de reportes"""
+    
+    def __init__(self):
+        self.console = Console()
+        self.logger = logging.getLogger('ReportGenerator')
+        self.initialize_templates()
+        
+    def initialize_templates(self):
+        """Inicializa entorno de plantillas"""
+        template_dir = os.path.join(os.path.dirname(__file__), 'templates')
+        self.env = Environment(
+            loader=FileSystemLoader(template_dir),
+            autoescape=True
+        )
+        
+    async def generate_report(self, data: Dict, output_format: str = 'html',
+                            output_file: str = None) -> None:
+        """Genera reporte completo"""
+        try:
+            # Procesar datos
+            processed_data = self._process_data(data)
+            
+            # Generar visualizaciones
+            visualizations = await self._generate_visualizations(processed_data)
+            
+            # Crear reporte
+            report = {
+                'timestamp': datetime.now().isoformat(),
+                'summary': self._generate_summary(processed_data),
+                'details': processed_data,
+                'visualizations': visualizations,
+                'recommendations': self._generate_recommendations(processed_data)
+            }
+            
+            # Generar salida según formato
+            if output_format == 'html':
+                output = self._generate_html_report(report)
+            elif output_format == 'json':
+                output = self._generate_json_report(report)
+            elif output_format == 'markdown':
+                output = self._generate_markdown_report(report)
+            else:
+                raise ValueError(f"Formato no soportado: {output_format}")
+                
+            # Guardar o mostrar reporte
+            if output_file:
+                self._save_report(output, output_file)
+            else:
+                self._display_report(report)
+                
+        except Exception as e:
+            self.logger.error(f"Error generando reporte: {str(e)}")
+            raise
+
+# modules/report/templates/html_report.html
+<!DOCTYPE html>
+<html>
+<head>
+    <title>NAST Security Report</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            background: #333;
+            color: white;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f9f9f9;
+            border-radius: 5px;
+        }
+        
+        .vulnerability {
+            border-left: 4px solid;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        
+        .critical { border-color: #ff0000; }
+        .high { border-color: #ff6600; }
+        .medium { border-color: #ffcc00; }
+        .low { border-color: #00cc00; }
+        
+        .chart {
+            width: 100%;
+            max-width: 800px;
+            margin: 20px auto;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        
+        th, td {
+            padding: 12px;
+            border: 1px solid #ddd;
+            text-align: left;
+        }
+        
+        th {
+            background-color: #f2f2f2;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>NAST Security Analysis Report</h1>
+            <p>Generated: {{ timestamp }}</p>
+        </div>
+        
+        <!-- Summary Section -->
+        <div class="section">
+            <h2>Executive Summary</h2>
+            {{ summary | safe }}
+        </div>
+        
+        <!-- Vulnerabilities Section -->
+        <div class="section">
+            <h2>Vulnerabilities</h2>
+            {% for vuln in vulnerabilities %}
+            <div class="vulnerability {{ vuln.severity.lower() }}">
+                <h3>{{ vuln.name }}</h3>
+                <p><strong>Severity:</strong> {{ vuln.severity }}</p>
+                <p>{{ vuln.description }}</p>
+                {% if vuln.remediation %}
+                <p><strong>Remediation:</strong> {{ vuln.remediation }}</p>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        
+        <!-- Network Analysis -->
+        <div class="section">
+            <h2>Network Analysis</h2>
+            <div class="chart">
+                {{ network_graph | safe }}
+            </div>
+            <table>
+                <tr>
+                    <th>Host</th>
+                    <th>Open Ports</th>
+                    <th>Services</th>
+                    <th>Risk Level</th>
+                </tr>
+                {% for host in hosts %}
+                <tr>
+                    <td>{{ host.ip }}</td>
+                    <td>{{ host.ports | join(', ') }}</td>
+                    <td>{{ host.services | join(', ') }}</td>
+                    <td>{{ host.risk }}</td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+        
+        <!-- Recommendations -->
+        <div class="section">
+            <h2>Recommendations</h2>
+            {% for rec in recommendations %}
+            <div class="recommendation">
+                <h3>{{ rec.title }}</h3>
+                <p>{{ rec.description }}</p>
+                <ul>
+                {% for step in rec.steps %}
+                    <li>{{ step }}</li>
+                {% endfor %}
+                </ul>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</body>
+</html>
